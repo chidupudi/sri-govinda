@@ -1,127 +1,171 @@
+// src/features/customers/customerSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import customerService from '../../services/customerService';
+import firebaseService from '../../services/firebaseService';
 
+// Fetch all customers
+export const fetchCustomers = createAsyncThunk(
+  'customers/fetchAll',
+  async (filters = {}, { rejectWithValue }) => {
+    try {
+      const options = {
+        orderBy: { field: 'createdAt', direction: 'desc' }
+      };
+
+      let customers = await firebaseService.getAll('customers', options);
+
+      // Apply search filter
+      if (filters.search) {
+        const searchTerm = filters.search.toLowerCase();
+        customers = customers.filter(customer => 
+          customer.name.toLowerCase().includes(searchTerm) ||
+          customer.phone.includes(searchTerm) ||
+          customer.email?.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      return customers;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// Create customer
 export const createCustomer = createAsyncThunk(
   'customers/create',
-  async (customerData, thunkAPI) => {
+  async (customerData, { rejectWithValue }) => {
     try {
-      return await customerService.createCustomer(customerData);
+      const customer = await firebaseService.create('customers', {
+        ...customerData,
+        totalPurchases: 0,
+        totalSpent: 0
+      });
+      return customer;
     } catch (error) {
-      return thunkAPI.rejectWithValue(error.response.data);
+      return rejectWithValue(error.message);
     }
   }
 );
 
-export const getCustomers = createAsyncThunk(
-  'customers/getAll',
-  async (params, thunkAPI) => {
-    try {
-      return await customerService.getCustomers(params);
-    } catch (error) {
-      return thunkAPI.rejectWithValue(error.response.data);
-    }
-  }
-);
-
+// Update customer
 export const updateCustomer = createAsyncThunk(
   'customers/update',
-  async ({ id, customerData }, thunkAPI) => {
+  async ({ id, customerData }, { rejectWithValue }) => {
     try {
-      return await customerService.updateCustomer(id, customerData);
+      const customer = await firebaseService.update('customers', id, customerData);
+      return customer;
     } catch (error) {
-      return thunkAPI.rejectWithValue(error.response.data);
+      return rejectWithValue(error.message);
     }
   }
 );
 
+// Delete customer
 export const deleteCustomer = createAsyncThunk(
   'customers/delete',
-  async (id, thunkAPI) => {
+  async (id, { rejectWithValue }) => {
     try {
-      await customerService.deleteCustomer(id);
+      await firebaseService.delete('customers', id);
       return id;
     } catch (error) {
-      return thunkAPI.rejectWithValue(error.response.data);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// Update customer stats (called when order is created)
+export const updateCustomerStats = createAsyncThunk(
+  'customers/updateStats',
+  async ({ customerId, orderAmount }, { rejectWithValue, getState }) => {
+    try {
+      const customer = getState().customers.items.find(c => c.id === customerId);
+      if (!customer) return;
+
+      const updatedCustomer = await firebaseService.update('customers', customerId, {
+        totalPurchases: (customer.totalPurchases || 0) + 1,
+        totalSpent: (customer.totalSpent || 0) + orderAmount,
+        lastPurchase: new Date().toISOString()
+      });
+      return updatedCustomer;
+    } catch (error) {
+      return rejectWithValue(error.message);
     }
   }
 );
 
 const initialState = {
-  customers: [],
+  items: [],
   selectedCustomer: null,
-  isLoading: false,
-  isSuccess: false,
-  isError: false,
-  message: ''
+  loading: false,
+  error: null,
+  total: 0
 };
 
 const customerSlice = createSlice({
   name: 'customers',
   initialState,
   reducers: {
-    reset: (state) => initialState,
     setSelectedCustomer: (state, action) => {
       state.selectedCustomer = action.payload;
+    },
+    clearSelectedCustomer: (state) => {
+      state.selectedCustomer = null;
+    },
+    clearError: (state) => {
+      state.error = null;
     }
   },
   extraReducers: (builder) => {
     builder
-      .addCase(createCustomer.pending, (state) => {
-        state.isLoading = true;
+      // Fetch customers
+      .addCase(fetchCustomers.pending, (state) => {
+        state.loading = true;
+        state.error = null;
       })
+      .addCase(fetchCustomers.fulfilled, (state, action) => {
+        state.loading = false;
+        state.items = action.payload;
+        state.total = action.payload.length;
+      })
+      .addCase(fetchCustomers.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Create customer
       .addCase(createCustomer.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.isSuccess = true;
-        state.customers.push(action.payload);
+        state.items.unshift(action.payload);
+        state.total += 1;
       })
       .addCase(createCustomer.rejected, (state, action) => {
-        state.isLoading = false;
-        state.isError = true;
-        state.message = action.payload;
+        state.error = action.payload;
       })
-      .addCase(getCustomers.pending, (state) => {
-        state.isLoading = true;
-      })
-      .addCase(getCustomers.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.isSuccess = true;
-        state.customers = action.payload;
-      })
-      .addCase(getCustomers.rejected, (state, action) => {
-        state.isLoading = false;
-        state.isError = true;
-        state.message = action.payload;
-      })
-      .addCase(updateCustomer.pending, (state) => {
-        state.isLoading = true;
-      })
+      // Update customer
       .addCase(updateCustomer.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.isSuccess = true;
-        state.customers = state.customers.map(customer =>
-          customer._id === action.payload._id ? action.payload : customer
-        );
+        const index = state.items.findIndex(item => item.id === action.payload.id);
+        if (index !== -1) {
+          state.items[index] = action.payload;
+        }
       })
       .addCase(updateCustomer.rejected, (state, action) => {
-        state.isLoading = false;
-        state.isError = true;
-        state.message = action.payload;
+        state.error = action.payload;
       })
-      .addCase(deleteCustomer.pending, (state) => {
-        state.isLoading = true;
-      })
+      // Delete customer
       .addCase(deleteCustomer.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.isSuccess = true;
-        state.customers = state.customers.filter(customer => customer._id !== action.payload);
+        state.items = state.items.filter(item => item.id !== action.payload);
+        state.total -= 1;
       })
       .addCase(deleteCustomer.rejected, (state, action) => {
-        state.isLoading = false;
-        state.isError = true;
-        state.message = action.payload;
+        state.error = action.payload;
+      })
+      // Update customer stats
+      .addCase(updateCustomerStats.fulfilled, (state, action) => {
+        const index = state.items.findIndex(item => item.id === action.payload.id);
+        if (index !== -1) {
+          state.items[index] = action.payload;
+        }
       });
   }
 });
 
-export const { reset, setSelectedCustomer } = customerSlice.actions;
+export const { setSelectedCustomer, clearSelectedCustomer, clearError } = customerSlice.actions;
 export default customerSlice.reducer;

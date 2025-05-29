@@ -1,18 +1,37 @@
+// src/app/store.js
 import { configureStore } from '@reduxjs/toolkit';
+import authReducer from '../features/auth/authSlice';
+import productReducer from '../features/products/productSlice';
 import customerReducer from '../features/customer/customerSlice';
+import orderReducer from '../features/order/orderSlice';
 import expenseReducer from '../features/expense/expenseSlice';
 import reportReducer from '../features/reports/reportSlice';
-import productReducer from '../redux/slices/productSlice';
-import orderReducer from '../features/order/orderSlice';
-import billReducer from '../features/bill/billSlice';
 
 export const store = configureStore({
   reducer: {
-    customers: customerReducer,
-    expenses: expenseReducer,
-    reports: reportReducer,
+    auth: authReducer,
     products: productReducer,
+    customers: customerReducer,
     orders: orderReducer,
-    bills: billReducer
-  }
+    expenses: expenseReducer,
+    reports: reportReducer
+  },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: [
+          'auth/setUser',
+          'products/fetchAll/fulfilled',
+          'customers/fetchAll/fulfilled',
+          'orders/fetchAll/fulfilled',
+          'expenses/fetchAll/fulfilled'
+        ],
+        ignoredPaths: [
+          'products.items',
+          'customers.items',
+          'orders.items',
+          'expenses.items'
+        ]
+      }
+    })
 });
