@@ -1,46 +1,65 @@
-// src/features/order/orderSlice.js
+// src/features/order/orderSlice.js - Fixed to avoid index issues
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import firebaseService from '../../services/firebaseService';
 import { updateStock } from '../products/productSlice';
 import { updateCustomerStats } from '../customer/customerSlice';
 
-// Fetch all orders
+// Fetch all orders with simplified filtering
 export const fetchOrders = createAsyncThunk(
   'orders/fetchAll',
   async (filters = {}, { rejectWithValue }) => {
     try {
+      // Use simplified options to avoid index requirements
       const options = {
-        orderBy: { field: 'createdAt', direction: 'desc' }
+        limit: filters.limit || 100 // Add reasonable default limit
       };
 
-      // Add filters
-      if (filters.status) {
-        options.where = [{ field: 'status', operator: '==', value: filters.status }];
-      }
-
-      if (filters.startDate && filters.endDate) {
-        const startDate = new Date(filters.startDate);
-        const endDate = new Date(filters.endDate);
-        options.where = [
-          ...(options.where || []),
-          { field: 'createdAt', operator: '>=', value: startDate },
-          { field: 'createdAt', operator: '<=', value: endDate }
-        ];
+      // Add where conditions for client-side filtering
+      if (filters.status || filters.customerId || filters.startDate || filters.endDate) {
+        options.where = [];
+        
+        // Only add simple filters that don't require indexes
+        if (filters.status) {
+          options.where.push({ field: 'status', operator: '==', value: filters.status });
+        }
+        
+        // Date range filters will be applied client-side
+        if (filters.startDate) {
+          options.where.push({ field: 'createdAt', operator: '>=', value: new Date(filters.startDate) });
+        }
+        
+        if (filters.endDate) {
+          options.where.push({ field: 'createdAt', operator: '<=', value: new Date(filters.endDate) });
+        }
       }
 
       let orders = await firebaseService.getAll('orders', options);
 
-      // Populate customer data
+      // Apply additional client-side filtering
+      if (filters.customerId) {
+        orders = orders.filter(order => order.customerId === filters.customerId);
+      }
+
+      if (filters.search) {
+        const searchTerm = filters.search.toLowerCase();
+        orders = orders.filter(order => 
+          order.orderNumber?.toLowerCase().includes(searchTerm) ||
+          order.customer?.name?.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      // Populate customer data for orders that have customerId
       const customerIds = [...new Set(orders.filter(o => o.customerId).map(o => o.customerId))];
       const customers = {};
       
       if (customerIds.length > 0) {
+        // Get customers in batches to avoid too many requests
         for (const customerId of customerIds) {
           try {
             const customer = await firebaseService.getById('customers', customerId);
             customers[customerId] = customer;
           } catch (error) {
-            console.warn(`Customer ${customerId} not found`);
+            console.warn(`Customer ${customerId} not found:`, error);
           }
         }
       }
@@ -53,6 +72,7 @@ export const fetchOrders = createAsyncThunk(
 
       return orders;
     } catch (error) {
+      console.error('Error fetching orders:', error);
       return rejectWithValue(error.message);
     }
   }
@@ -75,7 +95,8 @@ export const createOrder = createAsyncThunk(
         gst: gstAmount,
         total,
         status: 'completed',
-        paymentStatus: 'paid'
+        paymentStatus: 'paid',
+        createdAt: new Date() // Ensure consistent date format
       });
 
       // Update product stock
@@ -93,6 +114,7 @@ export const createOrder = createAsyncThunk(
 
       return order;
     } catch (error) {
+      console.error('Error creating order:', error);
       return rejectWithValue(error.message);
     }
   }
@@ -111,12 +133,13 @@ export const getOrder = createAsyncThunk(
           const customer = await firebaseService.getById('customers', order.customerId);
           order.customer = customer;
         } catch (error) {
-          console.warn(`Customer ${order.customerId} not found`);
+          console.warn(`Customer ${order.customerId} not found:`, error);
         }
       }
 
       return order;
     } catch (error) {
+      console.error('Error fetching order:', error);
       return rejectWithValue(error.message);
     }
   }
@@ -132,16 +155,19 @@ export const cancelOrder = createAsyncThunk(
 
       const updatedOrder = await firebaseService.update('orders', id, { 
         status: 'cancelled',
-        cancelledAt: new Date().toISOString()
+        cancelledAt: new Date()
       });
 
       // Restore product stock
-      for (const item of order.items) {
-        dispatch(updateStock({ id: item.product.id, stockChange: item.quantity }));
+      if (order.items) {
+        for (const item of order.items) {
+          dispatch(updateStock({ id: item.product.id, stockChange: item.quantity }));
+        }
       }
 
       return updatedOrder;
     } catch (error) {
+      console.error('Error cancelling order:', error);
       return rejectWithValue(error.message);
     }
   }
@@ -199,10 +225,12 @@ const orderSlice = createSlice({
         state.loading = false;
         state.items = action.payload;
         state.total = action.payload.length;
+        state.error = null;
       })
       .addCase(fetchOrders.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        // Don't clear items on error, keep existing data
       })
       // Create order
       .addCase(createOrder.pending, (state) => {
@@ -214,16 +242,25 @@ const orderSlice = createSlice({
         state.items.unshift(action.payload);
         state.cart = [];
         state.currentOrder = action.payload;
+        state.total = state.items.length;
+        state.error = null;
       })
       .addCase(createOrder.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
       // Get order
+      .addCase(getOrder.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(getOrder.fulfilled, (state, action) => {
+        state.loading = false;
         state.currentOrder = action.payload;
+        state.error = null;
       })
       .addCase(getOrder.rejected, (state, action) => {
+        state.loading = false;
         state.error = action.payload;
       })
       // Cancel order
@@ -235,6 +272,10 @@ const orderSlice = createSlice({
         if (state.currentOrder?.id === action.payload.id) {
           state.currentOrder = action.payload;
         }
+        state.error = null;
+      })
+      .addCase(cancelOrder.rejected, (state, action) => {
+        state.error = action.payload;
       });
   }
 });

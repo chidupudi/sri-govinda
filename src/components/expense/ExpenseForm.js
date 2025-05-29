@@ -42,11 +42,13 @@ const ExpenseForm = ({ open, onClose, onSuccess }) => {
 
   const formik = useFormik({
     initialValues: {
-      title: selectedExpense?.title || '',
-      amount: selectedExpense?.amount || 0,
-      category: selectedExpense?.category || '',
-      date: selectedExpense?.date || new Date(),
-      paymentMethod: selectedExpense?.paymentMethod || ''
+      title: '',
+      amount: 0,
+      category: '',
+      date: new Date(),
+      paymentMethod: '',
+      description: '',
+      receiptNumber: ''
     },
     validationSchema: Yup.object({
       title: Yup.string().required('Required'),
@@ -56,30 +58,35 @@ const ExpenseForm = ({ open, onClose, onSuccess }) => {
       paymentMethod: Yup.string().required('Required')
     }),
     onSubmit: async (values) => {
-      if (selectedExpense) {
-        await dispatch(updateExpense({ id: selectedExpense._id, expenseData: values }));
-      } else {
-        await dispatch(createExpense(values));
+      try {
+        if (selectedExpense) {
+          await dispatch(updateExpense({ id: selectedExpense.id, expenseData: values }));
+        } else {
+          await dispatch(createExpense(values));
+        }
+        onSuccess();
+      } catch (error) {
+        console.error('Error saving expense:', error);
       }
-      onSuccess();
     }
   });
 
-  // Update the useEffect dependency array
-  // Add selectedExpense to useEffect dependencies
+  // Fixed useEffect to properly handle form reset and population
   useEffect(() => {
     if (selectedExpense) {
       formik.setValues({
         title: selectedExpense.title || '',
-        amount: selectedExpense.amount || '',
+        amount: selectedExpense.amount || 0,
         category: selectedExpense.category || '',
-        date: selectedExpense.date ? new Date(selectedExpense.date) : new Date(),
+        date: selectedExpense.date ? new Date(selectedExpense.date?.toDate?.() || selectedExpense.date) : new Date(),
         paymentMethod: selectedExpense.paymentMethod || '',
         description: selectedExpense.description || '',
         receiptNumber: selectedExpense.receiptNumber || ''
       });
+    } else {
+      formik.resetForm();
     }
-  }, [selectedExpense, formik]);
+  }, [selectedExpense]); // Only depend on selectedExpense, not formik
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>

@@ -8,7 +8,8 @@ import {
   CircularProgress
 } from '@mui/material';
 import { CloudUpload as CloudUploadIcon } from '@mui/icons-material';
-import productService from '../../services/productService';
+// Removed the non-existent productService import since we're using Firebase
+import { fetchProducts } from '../../features/products/productSlice';
 
 const BulkUpload = ({ onSuccess }) => {
   const [file, setFile] = useState(null);
@@ -37,25 +38,31 @@ const BulkUpload = ({ onSuccess }) => {
     setError('');
 
     try {
-      const token = localStorage.getItem('token');
-      await productService.bulkUpload(file, token);
+      // For now, we'll show a message that bulk upload needs backend implementation
+      // In a real app, you would implement CSV parsing and bulk product creation
+      setError('Bulk upload feature requires backend implementation. Please add products individually for now.');
       setFile(null);
-      if (onSuccess) onSuccess();
+      
+      // Refresh the products list
+      dispatch(fetchProducts({}));
+      
+      // Note: Remove this setTimeout in production - it's just for demo
+      setTimeout(() => {
+        if (onSuccess) onSuccess();
+      }, 2000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Upload failed');
+      setError('Upload failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Use dispatch for success notification
-  const handleUploadSuccess = () => {
-    dispatch({ type: 'UPLOAD_SUCCESS' });
-    onSuccess();
-  };
-
   return (
     <Box sx={{ mt: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Select a CSV file with columns: name, category, weight, price, costPrice, stock
+      </Typography>
+      
       <input
         accept=".csv"
         style={{ display: 'none' }}
@@ -73,23 +80,27 @@ const BulkUpload = ({ onSuccess }) => {
           Select CSV File
         </Button>
       </label>
+      
       {file && (
         <Typography variant="body2" sx={{ mt: 1 }}>
           Selected file: {file.name}
         </Typography>
       )}
+      
       {error && (
         <Alert severity="error" sx={{ mt: 1 }}>
           {error}
         </Alert>
       )}
+      
       <Button
         variant="contained"
         onClick={handleUpload}
         disabled={!file || loading}
         sx={{ mt: 2 }}
+        startIcon={loading ? <CircularProgress size={20} /> : null}
       >
-        {loading ? <CircularProgress size={24} /> : 'Upload'}
+        {loading ? 'Processing...' : 'Upload'}
       </Button>
     </Box>
   );

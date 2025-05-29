@@ -24,15 +24,13 @@ import {
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { getExpenses, deleteExpense, setSelectedExpense, getExpenseSummary } from '../../features/expense/expenseSlice';
+import { fetchExpenses, deleteExpense, setSelectedExpense, getExpenseSummary } from '../../features/expense/expenseSlice'; // Fixed import
 import ExpenseForm from './ExpenseForm';
 import ExpenseSummary from './ExpenseSummary';
-// Add missing imports and fix syntax errors
-// import { CircularProgress } from '@mui/material';
 
 const ExpenseList = () => {
   const dispatch = useDispatch();
-  const { expenses, total } = useSelector(state => state.expenses);
+  const { items: expenses, total } = useSelector(state => state.expenses); // Fixed destructuring
   
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
@@ -42,7 +40,7 @@ const ExpenseList = () => {
   const [openForm, setOpenForm] = useState(false);
 
   // Wrap fetchExpenses in useCallback
-  const fetchExpenses = useCallback(() => {
+  const fetchExpensesData = useCallback(() => {
     const params = {
       page: page + 1,
       limit: rowsPerPage,
@@ -50,13 +48,13 @@ const ExpenseList = () => {
       ...(endDate && { endDate: endDate.toISOString() }),
       ...(category && { category })
     };
-    dispatch(getExpenses(params));
+    dispatch(fetchExpenses(params)); // Fixed function name
     dispatch(getExpenseSummary(params));
   }, [page, rowsPerPage, startDate, endDate, category, dispatch]);
   
   useEffect(() => {
-    fetchExpenses();
-  }, [fetchExpenses]);
+    fetchExpensesData();
+  }, [fetchExpensesData]);
 
   const handleEdit = (expense) => {
     dispatch(setSelectedExpense(expense));
@@ -66,7 +64,7 @@ const ExpenseList = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       await dispatch(deleteExpense(id));
-      fetchExpenses();
+      fetchExpensesData();
     }
   };
 
@@ -177,8 +175,10 @@ const ExpenseList = () => {
                   </TableHead>
                   <TableBody>
                     {expenses.map((expense) => (
-                      <TableRow key={expense._id}>
-                        <TableCell>{new Date(expense.date).toLocaleDateString()}</TableCell>
+                      <TableRow key={expense.id}>
+                        <TableCell>
+                          {new Date(expense.date?.toDate?.() || expense.date).toLocaleDateString()}
+                        </TableCell>
                         <TableCell>{expense.title}</TableCell>
                         <TableCell>{expense.category}</TableCell>
                         <TableCell>₹{expense.amount.toFixed(2)}</TableCell>
@@ -187,7 +187,7 @@ const ExpenseList = () => {
                           <IconButton onClick={() => handleEdit(expense)}>
                             <EditIcon />
                           </IconButton>
-                          <IconButton onClick={() => handleDelete(expense._id)}>
+                          <IconButton onClick={() => handleDelete(expense.id)}>
                             <DeleteIcon />
                           </IconButton>
                         </TableCell>
@@ -215,7 +215,7 @@ const ExpenseList = () => {
         onClose={() => setOpenForm(false)}
         onSuccess={() => {
           setOpenForm(false);
-          fetchExpenses();
+          fetchExpensesData();
         }}
       />
     </Box>

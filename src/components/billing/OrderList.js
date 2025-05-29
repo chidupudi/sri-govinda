@@ -23,12 +23,12 @@ import {
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers';
 import { Visibility as VisibilityIcon, Cancel as CancelIcon } from '@mui/icons-material';
-import { getOrders, cancelOrder } from '../../features/order/orderSlice';
+import { fetchOrders, cancelOrder } from '../../features/order/orderSlice'; // Fixed import
 import OrderSummary from './OrderSummary';
 
 const OrderList = () => {
   const dispatch = useDispatch();
-  const { orders = [], total = 0, isLoading } = useSelector(state => state.orders);
+  const { items: orders = [], total = 0, loading: isLoading } = useSelector(state => state.orders); // Fixed destructuring
   const navigate = useNavigate();
   
   const [startDate, setStartDate] = useState(null);
@@ -38,7 +38,7 @@ const OrderList = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [search] = useState('');
 
-  const fetchOrders = useCallback(() => {
+  const fetchOrdersData = useCallback(() => {
     const params = {
       page: page + 1,
       limit: rowsPerPage,
@@ -47,21 +47,21 @@ const OrderList = () => {
       ...(status && { status }),
       ...(search && { search })
     };
-    dispatch(getOrders(params));
+    dispatch(fetchOrders(params)); // Fixed function name
   }, [page, rowsPerPage, startDate, endDate, status, search, dispatch]);
 
   useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+    fetchOrdersData();
+  }, [fetchOrdersData]);
 
   const handleViewOrder = (orderId) => {
-    navigate(`/dashboard/invoice/${orderId}`);
+    navigate(`/invoice/${orderId}`); // Fixed path
   };
 
   const handleCancelOrder = async (id) => {
     if (window.confirm('Are you sure you want to cancel this order?')) {
       await dispatch(cancelOrder(id));
-      fetchOrders();
+      fetchOrdersData();
     }
   };
 
@@ -168,15 +168,15 @@ const OrderList = () => {
                           </TableRow>
                         ) : (
                           orders.map((order) => (
-                            <TableRow key={order._id}>
+                            <TableRow key={order.id}>
                               <TableCell>{order.orderNumber}</TableCell>
                               <TableCell>
-                                {new Date(order.createdAt).toLocaleDateString()}
+                                {new Date(order.createdAt?.toDate?.() || order.createdAt).toLocaleDateString()}
                               </TableCell>
                               <TableCell>
                                 {order.customer ? order.customer.name : 'Walk-in Customer'}
                               </TableCell>
-                              <TableCell align="right">₹{order.total.toFixed(2)}</TableCell>
+                              <TableCell align="right">₹{(order.total || 0).toFixed(2)}</TableCell>
                               <TableCell>
                                 <Chip
                                   label={order.status}
@@ -186,14 +186,14 @@ const OrderList = () => {
                               </TableCell>
                               <TableCell>
                                 <IconButton
-                                  onClick={() => handleViewOrder(order._id)}
+                                  onClick={() => handleViewOrder(order.id)}
                                   size="small"
                                 >
                                   <VisibilityIcon />
                                 </IconButton>
                                 {order.status === 'pending' && (
                                   <IconButton
-                                    onClick={() => handleCancelOrder(order._id)}
+                                    onClick={() => handleCancelOrder(order.id)}
                                     color="error"
                                     size="small"
                                   >

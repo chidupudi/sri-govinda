@@ -45,7 +45,7 @@ const CustomerForm = ({ open, onClose, onSuccess }) => {
     onSubmit: async (values) => {
       try {
         if (selectedCustomer) {
-          await dispatch(updateCustomer({ id: selectedCustomer._id, customerData: values }));
+          await dispatch(updateCustomer({ id: selectedCustomer.id, customerData: values }));
         } else {
           await dispatch(createCustomer(values));
         }
@@ -56,7 +56,7 @@ const CustomerForm = ({ open, onClose, onSuccess }) => {
     }
   });
 
-  // Fix useEffect dependency
+  // Fixed useEffect to properly handle form reset and population
   useEffect(() => {
     if (selectedCustomer) {
       formik.setValues({
@@ -71,8 +71,10 @@ const CustomerForm = ({ open, onClose, onSuccess }) => {
         },
         gstNumber: selectedCustomer.gstNumber || ''
       });
+    } else {
+      formik.resetForm();
     }
-  }, [selectedCustomer, formik]);
+  }, [selectedCustomer]); // Only depend on selectedCustomer
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
