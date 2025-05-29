@@ -1,3 +1,4 @@
+// src/components/billing/Billing.js
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -12,18 +13,17 @@ import {
   Alert,
   Divider
 } from '@mui/material';
-import { createOrder } from '../../features/order/orderSlice';
-import { getCustomers } from '../../features/customer/customerSlice';
-import { fetchProducts } from '../../redux/slices/productSlice';
+import { createOrder, addToCart } from '../../features/order/orderSlice';
+import { fetchCustomers } from '../../features/customer/customerSlice';
+import { fetchProducts } from '../../features/products/productSlice';
 import Cart from './Cart';
 import { useNavigate } from 'react-router-dom';
-import { addToCart } from '../../features/order/orderSlice';
 
 const Billing = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { cart, isLoading, isError, message } = useSelector(state => state.orders);
-  const { customers } = useSelector(state => state.customers);
+  const { cart, loading, error } = useSelector(state => state.orders);
+  const { items: customers } = useSelector(state => state.customers);
   const { items: products } = useSelector(state => state.products);
 
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -34,8 +34,8 @@ const Billing = () => {
   const paymentMethods = ['Cash', 'Card', 'UPI', 'Bank Transfer'];
 
   useEffect(() => {
-    dispatch(getCustomers());
-    dispatch(fetchProducts());
+    dispatch(fetchCustomers({}));
+    dispatch(fetchProducts({}));
   }, [dispatch]);
 
   const handleAddProduct = () => {
@@ -50,9 +50,9 @@ const Billing = () => {
     if (cart.length === 0) return;
     
     const orderData = {
-      customer: selectedCustomer?._id,
+      customerId: selectedCustomer?.id,
       items: cart.map(item => ({
-        product: item.product._id,
+        product: item.product,
         quantity: item.quantity,
         price: item.product.price
       })),
@@ -61,24 +61,26 @@ const Billing = () => {
       gstAmount: cart.reduce((total, item) => total + (item.product.price * item.quantity * 0.18), 0)
     };
     
-    await dispatch(createOrder(orderData));
-    navigate('/orders');
+    const result = await dispatch(createOrder(orderData));
+    if (result.type === 'orders/create/fulfilled') {
+      navigate('/orders');
+    }
   };
 
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>Billing</Typography>
       
-      {isError && (
-        <Alert severity="error" sx={{ mb: 2 }}>{message}</Alert>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
       )}
 
       <Grid container spacing={3}>
-        <Grid item size={{ xs: 12, md: 8 }}>
+        <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2, mb: 2 }}>
             <Typography variant="h6" gutterBottom>Add Products</Typography>
             <Grid container spacing={2} alignItems="center">
-              <Grid item size={{ xs: 6 }}>
+              <Grid item xs={6}>
                 <Autocomplete
                   options={products}
                   getOptionLabel={(product) => `${product.name} - ₹${product.price}`}
@@ -180,9 +182,9 @@ const Billing = () => {
               fullWidth
               size="large"
               onClick={handleSubmit}
-              disabled={cart.length === 0 || isLoading}
+              disabled={cart.length === 0 || loading}
             >
-              {isLoading ? 'Processing...' : 'Generate Invoice'}
+              {loading ? 'Processing...' : 'Generate Invoice'}
             </Button>
           </Paper>
         </Grid>

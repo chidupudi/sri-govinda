@@ -1,136 +1,192 @@
+// src/features/expense/expenseSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import expenseService from '../../services/expenseService';
+import firebaseService from '../../services/firebaseService';
 
+// Fetch all expenses
+export const fetchExpenses = createAsyncThunk(
+  'expenses/fetchAll',
+  async (filters = {}, { rejectWithValue }) => {
+    try {
+      const options = {
+        orderBy: { field: 'date', direction: 'desc' }
+      };
+
+      // Add filters
+      if (filters.category) {
+        options.where = [{ field: 'category', operator: '==', value: filters.category }];
+      }
+
+      if (filters.startDate && filters.endDate) {
+        const startDate = new Date(filters.startDate);
+        const endDate = new Date(filters.endDate);
+        options.where = [
+          ...(options.where || []),
+          { field: 'date', operator: '>=', value: startDate },
+          { field: 'date', operator: '<=', value: endDate }
+        ];
+      }
+
+      const expenses = await firebaseService.getAll('expenses', options);
+      return expenses;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// Create expense
 export const createExpense = createAsyncThunk(
   'expenses/create',
-  async (expenseData, thunkAPI) => {
+  async (expenseData, { rejectWithValue }) => {
     try {
-      return await expenseService.createExpense(expenseData);
+      const expense = await firebaseService.create('expenses', {
+        ...expenseData,
+        date: new Date(expenseData.date),
+        receiptNumber: expenseData.receiptNumber || `EXP-${Date.now()}`
+      });
+      return expense;
     } catch (error) {
-      return thunkAPI.rejectWithValue(error.response.data);
+      return rejectWithValue(error.message);
     }
   }
 );
 
-export const getExpenses = createAsyncThunk(
-  'expenses/getAll',
-  async (params, thunkAPI) => {
-    try {
-      return await expenseService.getExpenses(params);
-    } catch (error) {
-      return thunkAPI.rejectWithValue(error.response.data);
-    }
-  }
-);
-
-export const getExpenseSummary = createAsyncThunk(
-  'expenses/getSummary',
-  async (params, thunkAPI) => {
-    try {
-      return await expenseService.getExpenseSummary(params);
-    } catch (error) {
-      return thunkAPI.rejectWithValue(error.response.data);
-    }
-  }
-);
-
+// Update expense
 export const updateExpense = createAsyncThunk(
   'expenses/update',
-  async ({ id, expenseData }, thunkAPI) => {
+  async ({ id, expenseData }, { rejectWithValue }) => {
     try {
-      return await expenseService.updateExpense(id, expenseData);
+      const expense = await firebaseService.update('expenses', id, {
+        ...expenseData,
+        date: new Date(expenseData.date)
+      });
+      return expense;
     } catch (error) {
-      return thunkAPI.rejectWithValue(error.response.data);
+      return rejectWithValue(error.message);
     }
   }
 );
 
+// Delete expense
 export const deleteExpense = createAsyncThunk(
   'expenses/delete',
-  async (id, thunkAPI) => {
+  async (id, { rejectWithValue }) => {
     try {
-      await expenseService.deleteExpense(id);
+      await firebaseService.delete('expenses', id);
       return id;
     } catch (error) {
-      return thunkAPI.rejectWithValue(error.response.data);
+      return rejectWithValue(error.message);
     }
   }
 );
+
+// Get expense summary
+export const getExpenseSummary = createAsyncThunk(
+  'expenses/getSummary',
+  async (filters = {}, { rejectWithValue }) => {
+    try {
+      const options = {};
+      
+      if (filters.startDate && filters.endDate) {
+        const startDate = new Date(filters.startDate);
+        const endDate = new Date(filters.endDate);
+        options.where = [
+          { field: 'date', operator: '>=', value: startDate },
+          { field: 'date', operator: '<=', value: endDate }
+        ];
+      }
+
+      const expenses = await firebaseService.getAll('expenses', options);
+      
+      // Group by category
+      const summary = expenses.reduce((acc, expense) => {
+        const category = expense.category;
+        if (!acc[category]) {
+          acc[category] = { _id: category, total: 0, count: 0 };
+        }
+        acc[category].total += expense.amount;
+        acc[category].count += 1;
+        return acc;
+      }, {});
+
+      return Object.values(summary);
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+const initialState = {
+  items: [],
+  summary: [],
+  selectedExpense: null,
+  loading: false,
+  error: null,
+  total: 0
+};
 
 const expenseSlice = createSlice({
   name: 'expenses',
-  initialState: {
-    expenses: [],
-    summary: [],
-    total: 0,
-    pages: 0,
-    currentPage: 1,
-    selectedExpense: null,
-    isLoading: false,
-    isSuccess: false,
-    isError: false,
-    message: ''
-  },
+  initialState,
   reducers: {
-    reset: (state) => {
-      state.isLoading = false;
-      state.isSuccess = false;
-      state.isError = false;
-      state.message = '';
-    },
     setSelectedExpense: (state, action) => {
       state.selectedExpense = action.payload;
+    },
+    clearSelectedExpense: (state) => {
+      state.selectedExpense = null;
+    },
+    clearError: (state) => {
+      state.error = null;
     }
   },
   extraReducers: (builder) => {
     builder
-      .addCase(createExpense.pending, (state) => {
-        state.isLoading = true;
+      // Fetch expenses
+      .addCase(fetchExpenses.pending, (state) => {
+        state.loading = true;
+        state.error = null;
       })
+      .addCase(fetchExpenses.fulfilled, (state, action) => {
+        state.loading = false;
+        state.items = action.payload;
+        state.total = action.payload.length;
+      })
+      .addCase(fetchExpenses.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Create expense
       .addCase(createExpense.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.isSuccess = true;
-        state.expenses.unshift(action.payload);
+        state.items.unshift(action.payload);
+        state.total += 1;
       })
       .addCase(createExpense.rejected, (state, action) => {
-        state.isLoading = false;
-        state.isError = true;
-        state.message = action.payload?.message || 'Error creating expense';
+        state.error = action.payload;
       })
-      .addCase(getExpenses.pending, (state) => {
-        state.isLoading = true;
-      })
-      .addCase(getExpenses.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.isSuccess = true;
-        state.expenses = action.payload.expenses;
-        state.total = action.payload.total;
-        state.pages = action.payload.pages;
-        state.currentPage = action.payload.currentPage;
-      })
-      .addCase(getExpenses.rejected, (state, action) => {
-        state.isLoading = false;
-        state.isError = true;
-        state.message = action.payload?.message || 'Error fetching expenses';
-      })
-      .addCase(getExpenseSummary.fulfilled, (state, action) => {
-        state.summary = action.payload;
-      })
+      // Update expense
       .addCase(updateExpense.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.isSuccess = true;
-        const index = state.expenses.findIndex(expense => expense._id === action.payload._id);
+        const index = state.items.findIndex(item => item.id === action.payload.id);
         if (index !== -1) {
-          state.expenses[index] = action.payload;
+          state.items[index] = action.payload;
         }
       })
+      .addCase(updateExpense.rejected, (state, action) => {
+        state.error = action.payload;
+      })
+      // Delete expense
       .addCase(deleteExpense.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.isSuccess = true;
-        state.expenses = state.expenses.filter(expense => expense._id !== action.payload);
+        state.items = state.items.filter(item => item.id !== action.payload);
+        state.total -= 1;
+      })
+      .addCase(deleteExpense.rejected, (state, action) => {
+        state.error = action.payload;
+      })
+      // Get summary
+      .addCase(getExpenseSummary.fulfilled, (state, action) => {
+        state.summary = action.payload;
       });
   }
 });
 
-export const { reset, setSelectedExpense } = expenseSlice.actions;
+export const { setSelectedExpense, clearSelectedExpense, clearError } = expenseSlice.actions;
 export default expenseSlice.reducer;

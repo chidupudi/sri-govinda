@@ -21,10 +21,10 @@ export const store = configureStore({
       serializableCheck: {
         ignoredActions: [
           'auth/setUser',
-          'products/fetchAll/fulfilled',
-          'customers/fetchAll/fulfilled',
-          'orders/fetchAll/fulfilled',
-          'expenses/fetchAll/fulfilled'
+          'products/fetchProducts/fulfilled',
+          'customers/fetchCustomers/fulfilled',
+          'orders/fetchOrders/fulfilled',
+          'expenses/fetchExpenses/fulfilled'
         ],
         ignoredPaths: [
           'products.items',

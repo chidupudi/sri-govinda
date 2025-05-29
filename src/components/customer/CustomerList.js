@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+// src/components/customer/CustomerList.js
+import React, { useEffect, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
@@ -19,39 +20,25 @@ import {
   Typography
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { getCustomers, deleteCustomer, setSelectedCustomer } from '../../features/customer/customerSlice';
+import { fetchCustomers, deleteCustomer, setSelectedCustomer } from '../../features/customer/customerSlice';
 import CustomerForm from './CustomerForm';
-
-// Add missing imports
-// import { CircularProgress } from '@mui/material';
-
-// Add this import at the top
-import { useCallback } from 'react';
 
 const CustomerList = () => {
   const dispatch = useDispatch();
-  const { customers, total } = useSelector(state => state.customers);
+  const { items: customers, total, loading } = useSelector(state => state.customers);
   
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [openForm, setOpenForm] = useState(false);
 
-  const fetchCustomers = useCallback(() => {
-    dispatch(getCustomers({
-      page: page + 1,
-      limit: rowsPerPage,
-      search
-    }));
-  }, [dispatch, page, rowsPerPage, search]);
+  const fetchCustomersData = useCallback(() => {
+    dispatch(fetchCustomers({ search }));
+  }, [dispatch, search]);
 
   useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
-
-  // Remove unused variables or use them
-  // const loadingIndicator = isLoading ? <CircularProgress /> : null;
-  // const pageInfo = `Page ${currentPage} of ${Math.ceil(total / rowsPerPage)}`;
+    fetchCustomersData();
+  }, [fetchCustomersData]);
 
   const handleEdit = (customer) => {
     dispatch(setSelectedCustomer(customer));
@@ -61,7 +48,7 @@ const CustomerList = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this customer?')) {
       await dispatch(deleteCustomer(id));
-      fetchCustomers();
+      fetchCustomersData();
     }
   };
 
@@ -73,6 +60,9 @@ const CustomerList = () => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
+
+  // Get paginated customers
+  const paginatedCustomers = customers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -117,18 +107,18 @@ const CustomerList = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {customers.map((customer) => (
-                      <TableRow key={customer._id}>
+                    {paginatedCustomers.map((customer) => (
+                      <TableRow key={customer.id}>
                         <TableCell>{customer.name}</TableCell>
                         <TableCell>{customer.phone}</TableCell>
                         <TableCell>{customer.email}</TableCell>
                         <TableCell>{customer.gstNumber}</TableCell>
-                        <TableCell>{customer.totalPurchases}</TableCell>
+                        <TableCell>{customer.totalPurchases || 0}</TableCell>
                         <TableCell>
                           <IconButton onClick={() => handleEdit(customer)}>
                             <EditIcon />
                           </IconButton>
-                          <IconButton onClick={() => handleDelete(customer._id)}>
+                          <IconButton onClick={() => handleDelete(customer.id)}>
                             <DeleteIcon />
                           </IconButton>
                         </TableCell>
@@ -139,7 +129,7 @@ const CustomerList = () => {
                 <TablePagination
                   rowsPerPageOptions={[5, 10, 25]}
                   component="div"
-                  count={total}
+                  count={customers.length}
                   rowsPerPage={rowsPerPage}
                   page={page}
                   onPageChange={handleChangePage}
@@ -156,7 +146,7 @@ const CustomerList = () => {
         onClose={() => setOpenForm(false)}
         onSuccess={() => {
           setOpenForm(false);
-          fetchCustomers();
+          fetchCustomersData();
         }}
       />
     </Box>
