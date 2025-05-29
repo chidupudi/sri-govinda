@@ -1,23 +1,30 @@
 // src/components/dashboard/Dashboard.js
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { 
+  Row, 
+  Col, 
+  Card, 
+  Statistic, 
+  Typography, 
+  Spin, 
+  Table,
+  Tag,
+  Space,
+  Divider
+} from 'antd';
 import {
-  Box,
-  Grid,
-  Card,
-  CardContent,
-  Typography,
-  CircularProgress,
-  useTheme
-} from '@mui/material';
-import {
-  TrendingUp,
-  Inventory,
-  People,
-  ShoppingCart,
-  AttachMoney,
-  TrendingDown
-} from '@mui/icons-material';
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+  ShoppingCartOutlined,
+  UserOutlined,
+  ProductOutlined,
+  MoneyCollectOutlined,
+  ExclamationOutlined,
+  LineChartOutlined,
+  PieChartOutlined,
+  HistoryOutlined
+} from '@ant-design/icons';
 import { 
   LineChart, 
   Line, 
@@ -36,53 +43,39 @@ import { fetchProducts } from '../../features/products/productSlice';
 import { fetchCustomers } from '../../features/customer/customerSlice';
 import { fetchExpenses } from '../../features/expense/expenseSlice';
 
-const StatCard = ({ title, value, icon: Icon, color, trend, trendValue }) => {
-  const theme = useTheme();
+const { Title, Text } = Typography;
+
+const StatCard = ({ title, value, icon, color, trend, trendValue }) => {
+  const trendColor = trend === 'up' ? '#3f8600' : '#cf1322';
   
   return (
-    <Card sx={{ height: '100%' }}>
-      <CardContent>
-        <Box display="flex" alignItems="center" justifyContent="space-between">
-          <Box>
-            <Typography color="textSecondary" gutterBottom variant="body2">
-              {title}
-            </Typography>
-            <Typography variant="h4" component="div" color={color}>
-              {value}
-            </Typography>
-            {trend && (
-              <Box display="flex" alignItems="center" mt={1}>
-                {trend === 'up' ? (
-                  <TrendingUp color="success" fontSize="small" />
-                ) : (
-                  <TrendingDown color="error" fontSize="small" />
-                )}
-                <Typography 
-                  variant="body2" 
-                  color={trend === 'up' ? 'success.main' : 'error.main'}
-                  sx={{ ml: 0.5 }}
-                >
-                  {trendValue}
-                </Typography>
-              </Box>
+    <Card>
+      <Space direction="horizontal" style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <Statistic
+          title={title}
+          value={value}
+          prefix={icon}
+          valueStyle={{ color }}
+        />
+        {trend && (
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {trend === 'up' ? (
+              <ArrowUpOutlined style={{ color: trendColor }} />
+            ) : (
+              <ArrowDownOutlined style={{ color: trendColor }} />
             )}
-          </Box>
-          <Icon 
-            sx={{ 
-              fontSize: 40, 
-              color: theme.palette[color]?.main || color,
-              opacity: 0.7 
-            }} 
-          />
-        </Box>
-      </CardContent>
+            <Text style={{ color: trendColor, marginLeft: 4 }}>
+              {trendValue}
+            </Text>
+          </div>
+        )}
+      </Space>
     </Card>
   );
 };
 
 const Dashboard = () => {
   const dispatch = useDispatch();
-  const theme = useTheme();
   
   const { items: orders, loading: ordersLoading } = useSelector(state => state.orders);
   const { items: products, loading: productsLoading } = useSelector(state => state.products);
@@ -213,85 +206,128 @@ const Dashboard = () => {
 
   const isLoading = ordersLoading || productsLoading || customersLoading || expensesLoading;
 
-  if (isLoading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <CircularProgress />
-      </Box>
-    );
-  }
+  const recentOrdersColumns = [
+    {
+      title: 'Order ID',
+      dataIndex: 'id',
+      key: 'id',
+      render: (id) => `#${id.slice(-6)}`
+    },
+    {
+      title: 'Customer',
+      dataIndex: ['customer', 'name'],
+      key: 'customer',
+      render: (text) => text || 'Walk-in Customer'
+    },
+    {
+      title: 'Date',
+      dataIndex: 'createdAt',
+      key: 'date',
+      render: (date) => new Date(date?.toDate?.() || date).toLocaleDateString()
+    },
+    {
+      title: 'Amount',
+      dataIndex: 'total',
+      key: 'amount',
+      render: (amount) => `₹${amount?.toLocaleString() || 0}`
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => (
+        <Tag color={status === 'completed' ? 'green' : 'blue'}>
+          {status?.toUpperCase()}
+        </Tag>
+      )
+    }
+  ];
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
-  return (
-    <Box sx={{ flexGrow: 1, p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Dashboard
-      </Typography>
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
 
+  return (
+    <div style={{ padding: '24px' }}>
+      <Title level={2}>Dashboard Overview</Title>
+      
       {/* Statistics Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={4}>
+      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+        <Col xs={24} sm={12} md={8} lg={6}>
           <StatCard
             title="Total Sales"
-            value={`₹${dashboardData.totalSales.toLocaleString()}`}
-            icon={AttachMoney}
-            color="success"
+            value={dashboardData.totalSales}
+            prefix="₹"
+            icon={<MoneyCollectOutlined />}
+            color="#3f8600"
             trend="up"
-            trendValue="+12%"
+            trendValue="12%"
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Col>
+        <Col xs={24} sm={12} md={8} lg={6}>
           <StatCard
             title="Total Orders"
-            value={dashboardData.totalOrders.toLocaleString()}
-            icon={ShoppingCart}
-            color="primary"
+            value={dashboardData.totalOrders}
+            icon={<ShoppingCartOutlined />}
+            color="#1890ff"
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Col>
+        <Col xs={24} sm={12} md={8} lg={6}>
           <StatCard
             title="Customers"
-            value={dashboardData.totalCustomers.toLocaleString()}
-            icon={People}
-            color="info"
+            value={dashboardData.totalCustomers}
+            icon={<UserOutlined />}
+            color="#722ed1"
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Col>
+        <Col xs={24} sm={12} md={8} lg={6}>
           <StatCard
             title="Products"
-            value={dashboardData.totalProducts.toLocaleString()}
-            icon={Inventory}
-            color="secondary"
+            value={dashboardData.totalProducts}
+            icon={<ProductOutlined />}
+            color="#13c2c2"
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Col>
+        <Col xs={24} sm={12} md={8} lg={6}>
           <StatCard
             title="Low Stock Items"
-            value={dashboardData.lowStockProducts.toString()}
-            icon={TrendingDown}
-            color="warning"
+            value={dashboardData.lowStockProducts}
+            icon={<ExclamationOutlined />}
+            color="#faad14"
+            trend="down"
+            trendValue="5%"
           />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        </Col>
+        <Col xs={24} sm={12} md={8} lg={6}>
           <StatCard
             title="Monthly Expenses"
-            value={`₹${dashboardData.totalExpenses.toLocaleString()}`}
-            icon={TrendingDown}
-            color="error"
+            value={dashboardData.totalExpenses}
+            prefix="₹"
+            icon={<ArrowDownOutlined />}
+            color="#f5222d"
           />
-        </Grid>
-      </Grid>
+        </Col>
+      </Row>
 
-      {/* Charts */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} lg={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Sales Trend (Last 7 Days)
-              </Typography>
-              <ResponsiveContainer width="100%" height={300}>
+      {/* Charts Section */}
+      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+        <Col xs={24} lg={16}>
+          <Card 
+            title={
+              <Space>
+                <LineChartOutlined />
+                <Text strong>Sales Trend (Last 7 Days)</Text>
+              </Space>
+            }
+          >
+            <div style={{ height: '300px' }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={dashboardData.salesData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
@@ -300,23 +336,28 @@ const Dashboard = () => {
                   <Line 
                     type="monotone" 
                     dataKey="sales" 
-                    stroke={theme.palette.primary.main}
+                    stroke="#1890ff"
                     strokeWidth={2}
+                    activeDot={{ r: 8 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
+            </div>
           </Card>
-        </Grid>
-
-        <Grid item xs={12} lg={4}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Top Products
-              </Typography>
+        </Col>
+        
+        <Col xs={24} lg={8}>
+          <Card 
+            title={
+              <Space>
+                <PieChartOutlined />
+                <Text strong>Top Products by Revenue</Text>
+              </Space>
+            }
+          >
+            <div style={{ height: '300px' }}>
               {dashboardData.topProducts.length > 0 ? (
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={dashboardData.topProducts}
@@ -332,64 +373,45 @@ const Dashboard = () => {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip formatter={(value) => [`₹${value.toLocaleString()}`, 'Revenue']} />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <Box display="flex" justifyContent="center" alignItems="center" height={260}>
-                  <Typography color="textSecondary">No sales data available</Typography>
-                </Box>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center', 
+                  height: '100%' 
+                }}>
+                  <Text type="secondary">No sales data available</Text>
+                </div>
               )}
-            </CardContent>
+            </div>
           </Card>
-        </Grid>
+        </Col>
+      </Row>
 
-        {/* Recent Orders */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Recent Orders
-              </Typography>
-              {dashboardData.recentOrders.length > 0 ? (
-                <Box>
-                  {dashboardData.recentOrders.map((order, index) => (
-                    <Box
-                      key={order.id}
-                      display="flex"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      py={1}
-                      borderBottom={index < dashboardData.recentOrders.length - 1 ? 1 : 0}
-                      borderColor="divider"
-                    >
-                      <Box>
-                        <Typography variant="body1">
-                          {order.orderNumber || `Order #${order.id?.slice(-6)}`}
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          {order.customer?.name || 'Walk-in Customer'}
-                        </Typography>
-                      </Box>
-                      <Box textAlign="right">
-                        <Typography variant="body1" fontWeight="bold">
-                          ₹{(order.total || 0).toLocaleString()}
-                        </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          {new Date(order.createdAt?.toDate?.() || order.createdAt).toLocaleDateString()}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  ))}
-                </Box>
-              ) : (
-                <Typography color="textSecondary">No recent orders</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    </Box>
+      {/* Recent Orders */}
+      <Card
+        title={
+          <Space>
+            <HistoryOutlined />
+            <Text strong>Recent Orders</Text>
+          </Space>
+        }
+      >
+        <Table
+          columns={recentOrdersColumns}
+          dataSource={dashboardData.recentOrders}
+          rowKey="id"
+          pagination={false}
+          size="middle"
+          locale={{
+            emptyText: 'No recent orders'
+          }}
+        />
+      </Card>
+    </div>
   );
 };
 
